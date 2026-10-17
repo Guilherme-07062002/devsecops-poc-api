@@ -2,9 +2,9 @@ name: DevSecOps Security Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["master"]
 
 jobs:
   # -------------------------------------------------------------
@@ -78,12 +78,12 @@ jobs:
       - name: Run Trivy FS Scan (SCA)
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
+          scan-type: "fs"
           ignore-unfixed: false
-          format: 'sarif'
-          output: 'trivy-sca-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          format: "sarif"
+          output: "trivy-sca-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
 
       - name: Build container image
         run: docker build --tag devsecops-poc-api:${{ github.sha }} .
@@ -95,13 +95,13 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: false
-          exit-code: '1'
+          exit-code: "1"
 
       - name: Upload SCA SARIF to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-sca-results.sarif'
-          category: 'trivy-sca'
+          sarif_file: "trivy-sca-results.sarif"
+          category: "trivy-sca"
         if: always()
 
   # -------------------------------------------------------------
@@ -137,5 +137,5 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: checkov.sarif
-          category: 'checkov-iac'
+          category: "checkov-iac"
         if: always()
