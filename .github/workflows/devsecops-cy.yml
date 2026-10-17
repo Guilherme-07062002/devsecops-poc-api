@@ -31,6 +31,7 @@ jobs:
     name: Code Security Scan (Semgrep)
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
     steps:
       - name: Checkout Code
@@ -38,7 +39,7 @@ jobs:
 
       - name: Run Semgrep
         run: |
-          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep semgrep scan --config=auto --sarif -o semgrep.sarif || true
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep semgrep scan --config=auto --error --sarif -o /src/semgrep.sarif
 
       - name: Upload SARIF report to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -53,19 +54,48 @@ jobs:
     name: SCA & Container Scan (Trivy)
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run application tests
+        run: pnpm test
+
       - name: Run Trivy FS Scan (SCA)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          ignore-unfixed: true
+          ignore-unfixed: false
           format: 'sarif'
           output: 'trivy-sca-results.sarif'
           severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Build container image
+        run: docker build --tag devsecops-poc-api:${{ github.sha }} .
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: devsecops-poc-api:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          exit-code: '1'
 
       - name: Upload SCA SARIF to GitHub
         uses: github/codeql-action/upload-sarif@v3
@@ -81,10 +111,18 @@ jobs:
     name: IaC Security Scan (Checkov)
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Validate Terraform
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
 
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@master
@@ -93,7 +131,7 @@ jobs:
           framework: terraform
           output_format: sarif
           output_file_path: checkov.sarif
-          soft_fail: true
+          soft_fail: false
 
       - name: Upload Checkov SARIF to GitHub
         uses: github/codeql-action/upload-sarif@v3
